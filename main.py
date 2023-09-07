@@ -5,9 +5,9 @@ import random
 random.seed(42)
 #gymnasium.make("ALE/AirRaid-v5")
 
-#env = gym.make("CartPole-v1", render_mode='human')
+env = gym.make("CartPole-v1", render_mode='human')
 #env = gym.make("MountainCar-v0", render_mode='human')
-env = gym.make("ALE/AirRaid-v5", render_mode='human')
+#env = gym.make("ALE/AirRaid-v5", render_mode='human')
 observation, info = env.reset(seed=42)
 
 for _ in range(10000):
