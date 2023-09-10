@@ -12,9 +12,9 @@ from misc.replay_buffer import Replay_buffer
 class DQN:
     def __init__(self, env, Policy, config):
         self.env = env
-        self.action_space_size = env.action_space.shape[0]
+        self.action_space_size = env.action_space.n.size
         self.obs_space_size = env.observation_space.shape[0]
-        self.policy = Policy(self.action_space_size, self.obs_space_size, config['hidden_size'])
+        self.policy = Policy(self.obs_space_size, self.action_space_size, config)
 
         self.gamma = config['gamma']  # discount factor
         self.tau = config['tau']  # soft update coefficent
@@ -22,58 +22,82 @@ class DQN:
         self.exploration_prob = config['exploration_prob_init']
         self.exploration_prob_decay = config['exploration_prob_decay']
 
-        self.buffer = []
+        self.epochs = config['epochs']
         self.buffer_size = config['buffer_size']
         self.batch_size = config['batch_size']
-        self.replay_buffer = Replay_buffer()
 
+        self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size)
 
     def action(self, cur_obs):
         if np.random.random() < self.exploration_prob:
-            return np.random.choice(range(self.action_space_size))
-        q_vals = self.model.predict(cur_obs)
-        return np.argmax(q_vals)
+            return torch.tensor(np.random.choice(range(self.action_space_size + 1)))
+        q_vals = self.policy.predict(cur_obs)
+        return torch.argmax(q_vals)
 
     def update_exploration_prob(self):
         self.exploration_prob = self.exploration_prob * np.exp(-self.exploration_prob_decay)
+        #print(f'Exploration probability: {self.exploration_prob}')
+    def get_q_val_for_action(self, q_vals):
+        #indices = np.vstack(self.replay_buffer.actions)
+        indices = np.array(self.replay_buffer.sampled_actions)
+        #indices = torch.tensor(actions)
+
+        #selected_q_vals = torch.index_select(q_vals, dim=0, index=indices)
+        try:
+            selected_q_vals = q_vals[range(q_vals.shape[0]), indices]
+        except:
+            a = 2
+        return selected_q_vals
 
     def train(self):
-        self.replay_buffer.sample()
-        with torch.no_grad():
-            next_q_vals = self.policy.predict(self.replay_buffer.next_obs) #next_obs?
-            next_q_vals, _ = torch.max(next_q_vals, dim=1)
-            next_q_vals = next_q_vals.reshape(-1, 1)
-            #Temporal Difference
-            target_q_vals = self.replay_buffer.sampled_rewards + (1 - self.replay_buffer.sampled_dones * self.gamma * next_q_vals)
+        for epoch in range(self.epochs):
+            self.replay_buffer.clear_cache()
+            self.replay_buffer.sample()
+            with torch.no_grad():
+                next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs) #next_obs?
+                next_q_vals, _ = torch.max(next_q_vals, dim=1)
+                #next_q_vals = next_q_vals.reshape(-1, 1)
+                #Temporal Difference
+                target_q_vals = torch.tensor(self.replay_buffer.sampled_rewards) + (1 - torch.tensor(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
 
-        cur_q_vals = self.policy.predict(self.replay_buffer.cur_obs)
-
-        #Huber loss, mix between MSE and something else
-        self.policy.optimizer.zero_grad()
-        loss = F.smooth_l1_loss(target_q_vals, cur_q_vals)
-        loss.backward()
-        self.policy.optimizer.step()
+            cur_q_vals = self.policy.predict(self.replay_buffer.sampled_cur_obs)
+            cur_q_vals = self.get_q_val_for_action(cur_q_vals)
+            #cur_q_vals, _ = torch.max(cur_q_vals, dim=1)
+            #Its learning but not the correct policy so the values being compared are wrong.
+            #Huber loss, mix between MSE and something else
+            #print(self.policy.hidden_layer.weight[0, 0])
+            self.policy.optimizer.zero_grad()
+            #print(f'Values: {target_q_vals[0]}, {cur_q_vals[0]}')
+            loss = F.smooth_l1_loss(target_q_vals, cur_q_vals)
+            #print(f'Loss: {loss}')
+            loss.backward()
+            self.policy.optimizer.step()
 
     def learn(self, nr_of_episodes):
-        nr_of_steps = 0
         episode_rewards = [0 for i in range(nr_of_episodes)]
-
+        nr_of_steps = 0
+        actions_nr = [0, 0]
         for episode in range(nr_of_episodes):
-            cur_obs = self.env.reset()
-            cur_obs = np.array([cur_obs])
+            cur_obs, _ = self.env.reset(seed=42)
+
             while True:
-                nr_of_steps += 1
-                action = self.action(cur_obs)
-                next_obs, reward, done, _ = self.env.step(action)
-                self.replay_buffer.save_experience(action,cur_obs, next_obs, reward, done, nr_of_steps)
+                action = self.action(cur_obs).numpy()
+                actions_nr[action] += 1
+                next_obs, reward, done, _, _ = self.env.step(action)
+                self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
                 episode_rewards[episode] += reward
+                cur_obs = next_obs
+                nr_of_steps += 1
+
                 if done:
                     self.update_exploration_prob()
                     break
-
             if nr_of_steps >= self.batch_size:
                 self.train()
-
+            if episode % 100 == 0:
+                print(f'Actions: {actions_nr}')
+                print(f'Reward: {episode_rewards[episode]}')
+                #print(self.policy.output_layer.weight[0, 0])
         print(f'Rewards: {episode_rewards[-1]}')
 
     def test(self):

@@ -1,0 +1,5 @@
+The activation function is highly influential for the results.
+I got poor results when using sigmoid which squeezes the  q_values between 0 and 1,
+For tsetlin it might have to be high as well.
+So regression tsetlin machine is probably necessary.
+We might also have to be careful of how high the output range of the rtm should be, as it may affect training time.
