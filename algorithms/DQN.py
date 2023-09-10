@@ -43,10 +43,8 @@ class DQN:
         #indices = torch.tensor(actions)
 
         #selected_q_vals = torch.index_select(q_vals, dim=0, index=indices)
-        try:
-            selected_q_vals = q_vals[range(q_vals.shape[0]), indices]
-        except:
-            a = 2
+        selected_q_vals = q_vals[range(q_vals.shape[0]), indices]
+
         return selected_q_vals
 
     def train(self):
@@ -74,31 +72,34 @@ class DQN:
             self.policy.optimizer.step()
 
     def learn(self, nr_of_episodes):
-        episode_rewards = [0 for i in range(nr_of_episodes)]
         nr_of_steps = 0
         actions_nr = [0, 0]
         for episode in range(nr_of_episodes):
             cur_obs, _ = self.env.reset(seed=42)
+            episode_reward = 0
 
             while True:
                 action = self.action(cur_obs).numpy()
                 actions_nr[action] += 1
-                next_obs, reward, done, _, _ = self.env.step(action)
-                self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
-                episode_rewards[episode] += reward
+                next_obs, reward, done, truncated, _ = self.env.step(action)
+                if truncated:
+                    self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(truncated), nr_of_steps)
+                else:
+                    self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
+                episode_reward += reward
                 cur_obs = next_obs
                 nr_of_steps += 1
 
-                if done:
+                if done or truncated:
                     self.update_exploration_prob()
                     break
             if nr_of_steps >= self.batch_size:
                 self.train()
             if episode % 100 == 0:
                 print(f'Actions: {actions_nr}')
-                print(f'Reward: {episode_rewards[episode]}')
+                print(f'Reward: {episode_reward}')
                 #print(self.policy.output_layer.weight[0, 0])
-        print(f'Rewards: {episode_rewards[-1]}')
+        print(f'Rewards: {episode_reward}')
 
     def test(self):
         pass
