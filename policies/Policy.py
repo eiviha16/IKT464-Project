@@ -27,8 +27,8 @@ class QNet(nn.Module):
         x = self.activation(x)
 
         x = self.output_layer(x)
-        #action = self.output_activation(x)
-        return x
+        #action = (self.output_activation(x) - 0.5) * 50000#0000000000000000
+        return x#action
 
 class Policy(QNet):
     def __init__(self, input_size, output_size, config):

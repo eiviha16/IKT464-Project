@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import os
 import torch.optim as optim
 from misc.replay_buffer import Replay_buffer
 # https://towardsdatascience.com/deep-q-networks-theory-and-implementation-37543f60dd67
@@ -27,6 +27,10 @@ class DQN:
         self.batch_size = config['batch_size']
 
         self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size)
+        self.test_freq = config['test_freq']
+        self.nr_of_test_episodes = 100
+
+        self.run_id = 'run_' + str(len([i for i in os.listdir('./results')]) + 1)
 
     def action(self, cur_obs):
         if np.random.random() < self.exploration_prob:
@@ -75,6 +79,10 @@ class DQN:
         nr_of_steps = 0
         actions_nr = [0, 0]
         for episode in range(nr_of_episodes):
+            if self.test_freq:
+                if episode % self.test_freq == 0:
+                    self.test(nr_of_steps)
+
             cur_obs, _ = self.env.reset(seed=42)
             episode_reward = 0
 
@@ -95,11 +103,42 @@ class DQN:
                     break
             if nr_of_steps >= self.batch_size:
                 self.train()
-            if episode % 100 == 0:
+            if episode % 1000 == 0:
                 print(f'Actions: {actions_nr}')
                 print(f'Reward: {episode_reward}')
                 #print(self.policy.output_layer.weight[0, 0])
         print(f'Rewards: {episode_reward}')
 
-    def test(self):
-        pass
+    def test(self, nr_of_steps):
+        episode_rewards = np.array([0 for i in range(self.nr_of_test_episodes)])
+        for episode in range(self.nr_of_test_episodes):
+            obs, _ = self.env.reset(seed=episode)#episode)
+
+            while True:
+                action = self.action(obs).numpy()
+                obs, reward, done, truncated, _ = self.env.step(action)
+                episode_rewards[episode] += reward
+                if done or truncated:
+                    break
+
+        mean = np.mean(episode_rewards)
+        std = np.std(episode_rewards)
+        self.save_results(mean, std, nr_of_steps)
+
+    def save_results(self, mean, std, nr_of_steps):
+        base_dir = './results'
+        file_name = 'test_results.csv'
+
+        if not os.path.exists(base_dir):
+            os.makedirs(base_dir)
+        if not os.path.exists(os.path.join(base_dir, self.run_id)):
+            os.makedirs(os.path.join(base_dir, self.run_id))
+        file_exists = os.path.exists(os.path.join(base_dir, self.run_id, file_name))
+
+        with open(os.path.join(base_dir, self.run_id, file_name), "a") as file:
+            if not file_exists:
+                file.write("mean,std,steps\n")
+            file.write(f"{mean},{std},{nr_of_steps}\n")
+        print(f"Test data saved!")
+
+

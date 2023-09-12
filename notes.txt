@@ -5,6 +5,10 @@ So regression tsetlin machine is probably necessary.
 We might also have to be careful of how high the output range of the rtm should be, as it may affect training time.
 
 Plan going forward:
-1. Get 500 points over 100 runs.
+1. Get average 200 points over 100 runs.
 2. Experiment with ranges of q_values and see what the lower threshold for good results is.
 3. Research and implement RTM
+
+
+(note when experimenting with sigmoid, it needs to be multiplied with very high numbers to show signs of learning.
+Although it definitely makes it quite unstable.)
