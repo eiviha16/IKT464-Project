@@ -4,10 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import torch.optim as optim
+import yaml
+from tqdm import tqdm
+
 from misc.replay_buffer import Replay_buffer
+from misc.plot_test_results import plot_test_results
+
+
 # https://towardsdatascience.com/deep-q-networks-theory-and-implementation-37543f60dd67
 # https://stable-baselines3.readthedocs.io/en/master/modules/dqn.html
-
 
 class DQN:
     def __init__(self, env, Policy, config):
@@ -17,8 +22,6 @@ class DQN:
         self.policy = Policy(self.obs_space_size, self.action_space_size, config)
 
         self.gamma = config['gamma']  # discount factor
-        self.tau = config['tau']  # soft update coefficent
-
         self.exploration_prob = config['exploration_prob_init']
         self.exploration_prob_decay = config['exploration_prob_decay']
 
@@ -30,7 +33,31 @@ class DQN:
         self.test_freq = config['test_freq']
         self.nr_of_test_episodes = 100
 
-        self.run_id = 'run_' + str(len([i for i in os.listdir('./results')]) + 1)
+        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/DQN')]) + 1)
+        self.threshold_score = config['threshold_score']
+        self.has_reached_threshold = False
+
+        self.save = config['save']
+        self.best_scores = {'mean': 0, 'std': float('inf')}
+        self.config = config
+        self.save_path = ''#f'./results/DQN/{self.run_id}'
+        self.make_run_dir()
+        self.save_config()
+
+    def make_run_dir(self):
+        base_dir = './results'
+        algorithm = f'DQN'
+        if not os.path.exists(base_dir):
+            os.makedirs(base_dir)
+        if not os.path.exists(os.path.join(base_dir, algorithm)):
+            os.makedirs(os.path.join(base_dir, algorithm))
+        if not os.path.exists(os.path.join(base_dir, algorithm, self.run_id)):
+            os.makedirs(os.path.join(base_dir, algorithm, self.run_id))
+        self.save_path = os.path.join(base_dir, algorithm, self.run_id)
+
+    def save_config(self):
+        with open(f'{self.save_path}/config.yaml', "w") as yaml_file:
+            yaml.dump(self.config, yaml_file, default_flow_style=False)
 
     def action(self, cur_obs):
         if np.random.random() < self.exploration_prob:
@@ -40,15 +67,10 @@ class DQN:
 
     def update_exploration_prob(self):
         self.exploration_prob = self.exploration_prob * np.exp(-self.exploration_prob_decay)
-        #print(f'Exploration probability: {self.exploration_prob}')
+
     def get_q_val_for_action(self, q_vals):
-        #indices = np.vstack(self.replay_buffer.actions)
         indices = np.array(self.replay_buffer.sampled_actions)
-        #indices = torch.tensor(actions)
-
-        #selected_q_vals = torch.index_select(q_vals, dim=0, index=indices)
         selected_q_vals = q_vals[range(q_vals.shape[0]), indices]
-
         return selected_q_vals
 
     def train(self):
@@ -58,30 +80,27 @@ class DQN:
             with torch.no_grad():
                 next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs) #next_obs?
                 next_q_vals, _ = torch.max(next_q_vals, dim=1)
-                #next_q_vals = next_q_vals.reshape(-1, 1)
                 #Temporal Difference
                 target_q_vals = torch.tensor(self.replay_buffer.sampled_rewards) + (1 - torch.tensor(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
 
             cur_q_vals = self.policy.predict(self.replay_buffer.sampled_cur_obs)
             cur_q_vals = self.get_q_val_for_action(cur_q_vals)
-            #cur_q_vals, _ = torch.max(cur_q_vals, dim=1)
-            #Its learning but not the correct policy so the values being compared are wrong.
-            #Huber loss, mix between MSE and something else
-            #print(self.policy.hidden_layer.weight[0, 0])
             self.policy.optimizer.zero_grad()
-            #print(f'Values: {target_q_vals[0]}, {cur_q_vals[0]}')
             loss = F.smooth_l1_loss(target_q_vals, cur_q_vals)
-            #print(f'Loss: {loss}')
             loss.backward()
             self.policy.optimizer.step()
 
     def learn(self, nr_of_episodes):
+
         nr_of_steps = 0
         actions_nr = [0, 0]
-        for episode in range(nr_of_episodes):
+        for episode in tqdm(range(nr_of_episodes)):
             if self.test_freq:
                 if episode % self.test_freq == 0:
                     self.test(nr_of_steps)
+                    self.config['nr_of_episodes'] = episode + 1
+                    self.config['nr_of_steps'] = nr_of_steps
+                    self.save_config()
 
             cur_obs, _ = self.env.reset(seed=42)
             episode_reward = 0
@@ -103,14 +122,14 @@ class DQN:
                     break
             if nr_of_steps >= self.batch_size:
                 self.train()
-            if episode % 1000 == 0:
-                print(f'Actions: {actions_nr}')
-                print(f'Reward: {episode_reward}')
-                #print(self.policy.output_layer.weight[0, 0])
-        print(f'Rewards: {episode_reward}')
+
+        plot_test_results(self.save_path, text={'title': 'DQN'})
 
     def test(self, nr_of_steps):
+        exploration_prob = self.exploration_prob
+        self.exploration_prob = 0
         episode_rewards = np.array([0 for i in range(self.nr_of_test_episodes)])
+
         for episode in range(self.nr_of_test_episodes):
             obs, _ = self.env.reset(seed=episode)#episode)
 
@@ -123,22 +142,27 @@ class DQN:
 
         mean = np.mean(episode_rewards)
         std = np.std(episode_rewards)
+
         self.save_results(mean, std, nr_of_steps)
+        self.exploration_prob = exploration_prob
+        if mean > self.best_scores['mean']:
+            self.save_model()
+            self.best_scores['mean'] = mean
+
+        if mean >= self.threshold_score:
+            self.has_reached_threshold = True
+
+    def save_model(self):
+        file_name = 'model'
+        torch.save(self.policy, os.path.join(self.save_path, file_name))
 
     def save_results(self, mean, std, nr_of_steps):
-        base_dir = './results'
         file_name = 'test_results.csv'
+        file_exists = os.path.exists(os.path.join(self.save_path, file_name))
 
-        if not os.path.exists(base_dir):
-            os.makedirs(base_dir)
-        if not os.path.exists(os.path.join(base_dir, self.run_id)):
-            os.makedirs(os.path.join(base_dir, self.run_id))
-        file_exists = os.path.exists(os.path.join(base_dir, self.run_id, file_name))
-
-        with open(os.path.join(base_dir, self.run_id, file_name), "a") as file:
+        with open(os.path.join(self.save_path, file_name), "a") as file:
             if not file_exists:
                 file.write("mean,std,steps\n")
             file.write(f"{mean},{std},{nr_of_steps}\n")
-        print(f"Test data saved!")
 
 

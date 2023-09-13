@@ -12,3 +12,4 @@ Plan going forward:
 
 (note when experimenting with sigmoid, it needs to be multiplied with very high numbers to show signs of learning.
 Although it definitely makes it quite unstable.)
+lowest number so far c=50

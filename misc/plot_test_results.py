@@ -2,20 +2,18 @@ from matplotlib import pyplot as plt
 import csv
 import numpy as np
 
-def plot(data, text):
-
+def plot(data, text, file_path):
     plt.plot(data['timesteps'], data['mean'])
-
     plt.fill_between(data['timesteps'], np.array(data['mean']) - np.array(data['std']), np.array(data['mean']) + np.array(data['std']), alpha=0.25)
     plt.ylabel(f'Points')
     plt.xlabel(f'Timesteps')
-    plt.legend()
     plt.title(f'{text["title"]}')
+    plt.savefig(f'{file_path}/sample_plot.png')
     plt.show()
 
-def get_csv(run_id):
+def get_csv(file_path):
     data = {'mean': [], 'std': [], 'timesteps': []}
-    with open(f'../results/{run_id}/test_results.csv', 'r') as file:
+    with open(f'{file_path}/test_results.csv', 'r') as file:
         csv_reader = csv.reader(file)
         for row in csv_reader:
             if row[0] != 'mean':
@@ -24,10 +22,10 @@ def get_csv(run_id):
                 data['timesteps'].append(float(row[2]))
     return data
 
-def plot_test_results(run_id, text):
-    data = get_csv(run_id)
-    plot(data, text)
+def plot_test_results(file_path, text):
+    data = get_csv(file_path)
+    plot(data, text, file_path)
 
 if __name__ == "__main__":
     text = {'title': 'DQN'}
-    plot_test_results('run_10', text)
+    plot_test_results('run_15', text)
