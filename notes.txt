@@ -23,6 +23,7 @@ Regression tsetlin machine.
     - the one that made the action is updated I think.
     - so you get the target q_val (for the action taken) and then you update that rtm
 2. Discretize the input
+    -doubt I'll have to binarize the entire observation space, so generate values from DQN and then use them to define the binarizer.
 3. normalize the output by multiplying with 80 or so.
 4. have a lot of clauses to increase the floating point values possible(don't think so)
 5.

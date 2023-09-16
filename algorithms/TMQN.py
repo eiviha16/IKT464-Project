@@ -12,12 +12,12 @@ from misc.plot_test_results import plot_test_results
 # https://towardsdatascience.com/deep-q-networks-theory-and-implementation-37543f60dd67
 # https://stable-baselines3.readthedocs.io/en/master/modules/dqn.html
 
-class DQN:
+class TMQN:
     def __init__(self, env, Policy, config):
         self.env = env
         self.action_space_size = env.action_space.n.size
         self.obs_space_size = env.observation_space.shape[0]
-        self.policy = Policy(self.obs_space_size, self.action_space_size, config)
+        self.policy = Policy(config, env.observation_space.low, env.observation_space.high)
 
         self.gamma = config['gamma']  # discount factor
         self.exploration_prob = config['exploration_prob_init']
@@ -31,7 +31,7 @@ class DQN:
         self.test_freq = config['test_freq']
         self.nr_of_test_episodes = 100
 
-        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/DQN')]) + 1)
+        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/TMQN')]) + 1)
         self.threshold_score = config['threshold_score']
         self.has_reached_threshold = False
 
@@ -44,7 +44,7 @@ class DQN:
 
     def make_run_dir(self):
         base_dir = './results'
-        algorithm = f'DQN'
+        algorithm = f'TMQN'
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
         if not os.path.exists(os.path.join(base_dir, algorithm)):
@@ -59,39 +59,45 @@ class DQN:
 
     def action(self, cur_obs):
         if np.random.random() < self.exploration_prob:
-            return torch.tensor(np.random.choice(range(self.action_space_size + 1)))
+            return np.random.choice(range(self.action_space_size + 1))
         q_vals = self.policy.predict(cur_obs)
-        return torch.argmax(q_vals)
+        return np.argmax(q_vals)
 
     def update_exploration_prob(self):
         self.exploration_prob = self.exploration_prob * np.exp(-self.exploration_prob_decay)
 
-    def get_q_val_for_action(self, q_vals):
+    def get_q_val_and_obs_for_tm(self, target_q_vals):
         #this should be replaced with something that returns two lists
         #one with the target q_vals for action 1 (tm1)
         #one with the target q_vals for action 2 (tm2)
-        indices = np.array(self.replay_buffer.sampled_actions)
-        selected_q_vals = q_vals[range(q_vals.shape[0]), indices]
-        return selected_q_vals
+        tm_1_input, tm_2_input = {'observations': [], 'target_q_vals': []}, {'observations': [], 'target_q_vals': []}
+        actions = self.replay_buffer.sampled_actions
+        for index, action in actions:
+            if action == 0:
+                tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                tm_1_input['target_q_vals'].append(target_q_vals[index])
+            elif action == 1:
+                tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                tm_2_input['target_q_vals'].append(target_q_vals[index])
+            else:
+                print('Error with get_q_val_for_action')
+        return tm_1_input, tm_2_input
 
     def train(self):
         for epoch in range(self.epochs):
             self.replay_buffer.clear_cache()
             self.replay_buffer.sample()
-            with torch.no_grad():
-                next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs) #next_obs?
+
+            #calculate target_q_vals
+            next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs) #next_obs?
                 #should this be done here? or should I use the q_values depending on the action taken.
                 #I think it should be.
-                next_q_vals, _ = torch.max(next_q_vals, dim=1)
+            next_q_vals, _ = np.max(next_q_vals, dim=1)
                 #Temporal Difference
-                target_q_vals = torch.tensor(self.replay_buffer.sampled_rewards) + (1 - torch.tensor(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
+            target_q_vals = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
 
-            cur_q_vals = self.policy.predict(self.replay_buffer.sampled_cur_obs)
-            cur_q_vals = self.get_q_val_for_action(cur_q_vals)
-            self.policy.optimizer.zero_grad()
-            loss = F.smooth_l1_loss(target_q_vals, cur_q_vals)
-            loss.backward()
-            self.policy.optimizer.step()
+            tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals)
+            self.policy.update(tm_1_input, tm_2_input)
 
     def learn(self, nr_of_episodes):
 
@@ -109,7 +115,7 @@ class DQN:
             episode_reward = 0
 
             while True:
-                action = self.action(cur_obs).numpy()
+                action = self.action(cur_obs)
                 actions_nr[action] += 1
                 next_obs, reward, done, truncated, _ = self.env.step(action)
                 if truncated:
@@ -126,7 +132,7 @@ class DQN:
             if nr_of_steps >= self.batch_size:
                 self.train()
 
-        plot_test_results(self.save_path, text={'title': 'DQN'})
+        plot_test_results(self.save_path, text={'title': 'TMQN'})
 
     def test(self, nr_of_steps):
         exploration_prob = self.exploration_prob
@@ -137,7 +143,7 @@ class DQN:
             obs, _ = self.env.reset(seed=episode)#episode)
 
             while True:
-                action = self.action(obs).numpy()
+                action = self.action(obs)
                 obs, reward, done, truncated, _ = self.env.step(action)
                 episode_rewards[episode] += reward
                 if done or truncated:
