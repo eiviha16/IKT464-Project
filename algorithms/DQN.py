@@ -1,9 +1,7 @@
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import os
-import torch.optim as optim
 import yaml
 from tqdm import tqdm
 
@@ -146,14 +144,13 @@ class DQN:
         self.save_results(mean, std, nr_of_steps)
         self.exploration_prob = exploration_prob
         if mean > self.best_scores['mean']:
-            self.save_model()
+            self.save_model('best_model')
             self.best_scores['mean'] = mean
-
+        self.save_model('last_model')
         if mean >= self.threshold_score:
             self.has_reached_threshold = True
 
-    def save_model(self):
-        file_name = 'model'
+    def save_model(self, file_name):
         torch.save(self.policy, os.path.join(self.save_path, file_name))
 
     def save_results(self, mean, std, nr_of_steps):

@@ -6,8 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+scrapbook/
+results/
+myenv/
+env310/
 # Distribution / packaging
 .Python
+.scrapbook
 build/
 develop-eggs/
 dist/

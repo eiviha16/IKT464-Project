@@ -13,3 +13,12 @@ Plan going forward:
 (note when experimenting with sigmoid, it needs to be multiplied with very high numbers to show signs of learning.
 Although it definitely makes it quite unstable.)
 lowest number so far c=50
+
+using sigmoid function makes the results unstable, it seems to perform best at c=80, higher or lower gives poor results.
+
+Regression tsetlin machine.
+1. Use two regression tsetlin machines, one for each action
+2. Discretize the input
+3. normalize the output by multiplying with 80 or so.
+4. have a lot of clauses to increase the floating point values possible
+5.
