@@ -16,9 +16,21 @@ lowest number so far c=50
 
 using sigmoid function makes the results unstable, it seems to perform best at c=80, higher or lower gives poor results.
 
+https://github.com/cair/tmu
 Regression tsetlin machine.
-1. Use two regression tsetlin machines, one for each action
+1. Use two regression tsetlin machines, one for each action.
+    - they are updated individually,
+    - the one that made the action is updated I think.
+    - so you get the target q_val (for the action taken) and then you update that rtm
 2. Discretize the input
 3. normalize the output by multiplying with 80 or so.
-4. have a lot of clauses to increase the floating point values possible
+4. have a lot of clauses to increase the floating point values possible(don't think so)
 5.
+
+TMU library doesnt seem to work for RTM, changing clauses affects the output range.
+Solution: It requires a high T to work.
+
+Thoughts:
+Try to make the difference in q-values larger if they are too similar.
+this may be done by using something similar to advantage for PPO.
+or atleast an algorithm that takes into account all future rewards.
