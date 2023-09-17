@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import os
 import yaml
 from tqdm import tqdm
-
+import random
 from misc.replay_buffer import Replay_buffer
 from misc.plot_test_results import plot_test_results
 
@@ -41,6 +41,8 @@ class DQN:
         self.save_path = ''#f'./results/DQN/{self.run_id}'
         self.make_run_dir()
         self.save_config()
+
+        self.observations = []
 
     def make_run_dir(self):
         base_dir = './results'
@@ -120,6 +122,7 @@ class DQN:
                     break
             if nr_of_steps >= self.batch_size:
                 self.train()
+            np.savetxt('observations3.txt', self.observations, delimiter=',', fmt='%f')
 
         plot_test_results(self.save_path, text={'title': 'DQN'})
 
@@ -127,11 +130,12 @@ class DQN:
         exploration_prob = self.exploration_prob
         self.exploration_prob = 0
         episode_rewards = np.array([0 for i in range(self.nr_of_test_episodes)])
-
         for episode in range(self.nr_of_test_episodes):
             obs, _ = self.env.reset(seed=episode)#episode)
-
             while True:
+                lucky_number = random.randint(1, self.nr_of_test_episodes)
+                if episode % lucky_number == 0:
+                    self.observations.append(obs)
                 action = self.action(obs).numpy()
                 obs, reward, done, truncated, _ = self.env.step(action)
                 episode_rewards[episode] += reward
