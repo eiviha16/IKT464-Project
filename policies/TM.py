@@ -2,11 +2,12 @@ from tmu.preprocessing.standard_binarizer.binarizer import StandardBinarizer
 from tmu.models.regression.vanilla_regressor import TMRegressor
 import numpy as np
 from sklearn import datasets
+import random
 class Policy():
     def __init__(self, config):
         #initialize each tm
-        self.tm1 = TMRegressor(config['nr_of_clauses'], config['T'], config['s'], platform=config['device'], weighted_clauses=config['weighted_clauses'])
-        self.tm2 = TMRegressor(config['nr_of_clauses'], config['T'], config['s'], platform=config['device'], weighted_clauses=config['weighted_clauses'])
+        self.tm1 = TMRegressor(config['nr_of_clauses'], config['T'], config['s'], platform=config['device'], weighted_clauses=config['weighted_clauses'], min_y=config['y_min'], max_y=config['y_max'])
+        self.tm2 = TMRegressor(config['nr_of_clauses'], config['T'], config['s'], platform=config['device'], weighted_clauses=config['weighted_clauses'], min_y=config['y_min'], max_y=config['y_max'])
         self.vals = np.loadtxt('./misc/observation_data.txt', delimiter=',').astype(dtype=np.float32)
 
         self.binarizer = StandardBinarizer(max_bits_per_feature=config['bits_per_feature'])
@@ -18,9 +19,9 @@ class Policy():
         self.binarizer.fit(self.vals)
 
     def init_TMs(self):
-        val = self.binarizer.transform(self.vals[0].reshape(1, 4))
-        self.tm1.fit(val, np.array([1.0]))
-        self.tm2.fit(val, np.array([1.0]))
+        vals = self.binarizer.transform(self.vals)
+        self.tm1.fit(vals[:100], np.array([random.randint(0, 100) for _ in range(len(vals[:100]))]))
+        self.tm2.fit(vals[:100],  np.array([random.randint(0, 100) for _ in range(len(vals[:100]))]))
 
     def update(self, tm_1_input, tm_2_input):
         # take a list for each tm that is being updated.
