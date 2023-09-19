@@ -17,7 +17,7 @@ class TMQN:
         self.env = env
         self.action_space_size = env.action_space.n.size
         self.obs_space_size = env.observation_space.shape[0]
-        self.policy = Policy(config, env.observation_space.low, env.observation_space.high)
+        self.policy = Policy(config)
 
         self.gamma = config['gamma']  # discount factor
         self.exploration_prob = config['exploration_prob_init']
@@ -72,7 +72,7 @@ class TMQN:
         #one with the target q_vals for action 2 (tm2)
         tm_1_input, tm_2_input = {'observations': [], 'target_q_vals': []}, {'observations': [], 'target_q_vals': []}
         actions = self.replay_buffer.sampled_actions
-        for index, action in actions:
+        for index, action in enumerate(actions):
             if action == 0:
                 tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
                 tm_1_input['target_q_vals'].append(target_q_vals[index])
@@ -89,10 +89,10 @@ class TMQN:
             self.replay_buffer.sample()
 
             #calculate target_q_vals
-            next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs) #next_obs?
+            next_q_vals = self.policy.predict(np.array(self.replay_buffer.sampled_next_obs)) #next_obs?
                 #should this be done here? or should I use the q_values depending on the action taken.
                 #I think it should be.
-            next_q_vals, _ = np.max(next_q_vals, dim=1)
+            next_q_vals = np.max(next_q_vals, axis=1)
                 #Temporal Difference
             target_q_vals = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
 
