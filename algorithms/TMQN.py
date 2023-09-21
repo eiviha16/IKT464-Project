@@ -27,9 +27,11 @@ class TMQN:
         self.buffer_size = config['buffer_size']
         self.batch_size = config['batch_size']
 
+        self.y_max = config['y_max']
+
         self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size)
         self.test_freq = config['test_freq']
-        self.nr_of_test_episodes = 100
+        self.nr_of_test_episodes = 1
 
         self.run_id = 'run_' + str(len([i for i in os.listdir('./results/TMQN')]) + 1)
         self.threshold_score = config['threshold_score']
@@ -76,11 +78,22 @@ class TMQN:
             if action == 0:
                 tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
                 tm_1_input['target_q_vals'].append(target_q_vals[index])
+
+                #tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                #tm_2_input['target_q_vals'].append(self.y_max - target_q_vals_min[index])
+
             elif action == 1:
                 tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
                 tm_2_input['target_q_vals'].append(target_q_vals[index])
+
+                #tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                #tm_1_input['target_q_vals'].append(self.y_max - target_q_vals_min[index])
+
             else:
                 print('Error with get_q_val_for_action')
+
+            print(f'Target q vals: {target_q_vals[index]}')
+
         return tm_1_input, tm_2_input
 
     def train(self):
@@ -92,11 +105,13 @@ class TMQN:
             next_q_vals = self.policy.predict(np.array(self.replay_buffer.sampled_next_obs)) #next_obs?
                 #should this be done here? or should I use the q_values depending on the action taken.
                 #I think it should be.
-            next_q_vals = np.max(next_q_vals, axis=1)
-                #Temporal Difference
-            target_q_vals = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
-
-            tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals)
+            next_q_vals_max = np.max(next_q_vals, axis=1)
+            next_q_vals_min = np.min(next_q_vals, axis=1)
+            #Temporal Difference
+            target_q_vals_max = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals_max
+            target_q_vals_min = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals_min
+            #if target q_vals are lower than 100 it will be considered negative reward. so I need to find a way to normalize the values so that good actions are always over 100 and bad ones under 100.
+            tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals_max, target_q_vals_min)
             self.policy.update(tm_1_input, tm_2_input)
 
     def learn(self, nr_of_episodes):

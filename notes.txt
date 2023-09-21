@@ -35,3 +35,45 @@ Thoughts:
 Try to make the difference in q-values larger if they are too similar.
 this may be done by using something similar to advantage for PPO.
 or atleast an algorithm that takes into account all future rewards.
+
+
+When doing negative reinforcement other tm -> y_max - target_q_val it learns, but approximates 1.0 for its target_q_val
+most values by the tms is below halfway point of the tm y_max.
+
+Does the rtm give positive reinforcemnt if the value is higher than y_max / 2 and negative if it is below?
+No, it bases it on whether the predicted value is higher or lower than the one we calculated ourselves.
+if the prediction is the same before training the model, then using the same input should produce the same output,
+this means that adding a reward +1 will cause positive reinforcement, and the next state being "done" will very likely result in negative reinforcement
+
+calculate target q values for both tms not just one like it is now, that wont work i atleast haveto know which
+wait no probably not target q-val is the expected advantage
+
+SOLUTION: calculate argmin as well and then update based on that as well if it is
+not the solution
+
+If the tm predicts a lower value than the target_q_val it will get positive feedback, making the clauses move closer to predicting 1 each
+If the TM predicts a higher value than the target_q_val it will get negative feedback, making the clauses move closer to predicting 0 each
+
+Action 1 was taken, meaning TM 1 had a higher q_value than TM 2
+
+----------------------------------------------------------------
+TM 1 predicts 9, target_q_val = 10 -> positive feedback (must i know which TM gave the target q value?)
+what does TM2 do here?
+
+TM 1 predicts 9, target_q_val = 1 -> negative feedback
+what does TM2 do here?
+
+How do i know if the action was correct?
+I know it based on whether the next state was done(fail) or not,
+so I want to give feedback to the TM that made the decision,
+
+- if it failed (done) then the TM should be given negative feedback to lower the q_value it predicts, (this means a lower target q val)
+  (and ideally the other TM should be given positive feedback to increase the q_value it predicts) (this means a high target q val for the other tm (y_max))
+  (We may not know if that would not result in a fail, but maybe we should assume)
+
+-if it succeeded then the TM should be given positive feedback to increase the q_value it predicts. (this means a higher target q val)
+ (should the other TM be given negative feedback to reduce the q_value it predicts?)
+ (it may not be a bad action for the tm, we also don't know if it would have resulted in a fail or not) if we are to have this it means a lower target_q_val (y_min))
+
+
+

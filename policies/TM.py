@@ -20,8 +20,8 @@ class Policy():
 
     def init_TMs(self):
         vals = self.binarizer.transform(self.vals)
-        self.tm1.fit(vals[:100], np.array([random.randint(0, 100) for _ in range(len(vals[:100]))]))
-        self.tm2.fit(vals[:100],  np.array([random.randint(0, 100) for _ in range(len(vals[:100]))]))
+        self.tm1.fit(vals[:100], np.array([random.randint(0, 60) for _ in range(len(vals[:100]))]))
+        self.tm2.fit(vals[:100],  np.array([random.randint(0, 60) for _ in range(len(vals[:100]))]))
 
     def update(self, tm_1_input, tm_2_input):
         # take a list for each tm that is being updated.
