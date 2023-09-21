@@ -28,6 +28,7 @@ class TMQN:
         self.batch_size = config['batch_size']
 
         self.y_max = config['y_max']
+        self.y_min = config['y_min']
 
         self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size)
         self.test_freq = config['test_freq']
@@ -79,15 +80,43 @@ class TMQN:
                 tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
                 tm_1_input['target_q_vals'].append(target_q_vals[index])
 
-                #tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
-                #tm_2_input['target_q_vals'].append(self.y_max - target_q_vals_min[index])
+                #if TM1 caused failure increase q_val for TM2 and reduce q_val for TM1
+                """
+                if self.replay_buffer.sampled_dones[index]:
+                    print(self.replay_buffer.sampled_dones[index])
+                    #tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    #tm_1_input['target_q_vals'].append(self.y_min)
+
+                    tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    tm_2_input['target_q_vals'].append(self.y_max)
+                else:
+                    tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    tm_1_input['target_q_vals'].append(self.y_max)
+
+                    #not necessarily this one
+                    #tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    #tm_2_input['target_q_vals'].append(self.y_min)
+                """
 
             elif action == 1:
                 tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
                 tm_2_input['target_q_vals'].append(target_q_vals[index])
+                """
+                if self.replay_buffer.sampled_dones[index]:
+                    #tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    #tm_2_input['target_q_vals'].append(self.y_min)
 
-                #tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
-                #tm_1_input['target_q_vals'].append(self.y_max - target_q_vals_min[index])
+                    tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    tm_1_input['target_q_vals'].append(self.y_max)
+
+                else:
+                    tm_2_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    tm_2_input['target_q_vals'].append(self.y_max)
+
+                    # not necessarily this one
+                    #tm_1_input['observations'].append(self.replay_buffer.sampled_cur_obs[index])
+                    #tm_1_input['target_q_vals'].append(self.y_min)
+                """
 
             else:
                 print('Error with get_q_val_for_action')
@@ -105,13 +134,11 @@ class TMQN:
             next_q_vals = self.policy.predict(np.array(self.replay_buffer.sampled_next_obs)) #next_obs?
                 #should this be done here? or should I use the q_values depending on the action taken.
                 #I think it should be.
-            next_q_vals_max = np.max(next_q_vals, axis=1)
-            next_q_vals_min = np.min(next_q_vals, axis=1)
+            next_q_vals = np.max(next_q_vals, axis=1)
             #Temporal Difference
-            target_q_vals_max = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals_max
-            target_q_vals_min = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals_min
+            target_q_vals = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
             #if target q_vals are lower than 100 it will be considered negative reward. so I need to find a way to normalize the values so that good actions are always over 100 and bad ones under 100.
-            tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals_max, target_q_vals_min)
+            tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals)
             self.policy.update(tm_1_input, tm_2_input)
 
     def learn(self, nr_of_episodes):

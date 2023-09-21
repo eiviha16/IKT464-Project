@@ -67,13 +67,19 @@ How do i know if the action was correct?
 I know it based on whether the next state was done(fail) or not,
 so I want to give feedback to the TM that made the decision,
 
-- if it failed (done) then the TM should be given negative feedback to lower the q_value it predicts, (this means a lower target q val)
+
+POSSIBLE SOLUTION
+- if it failed (done) then the TM should be given negative feedback to lower the q_value it predicts, (this means a lower target q val) (y_min)
   (and ideally the other TM should be given positive feedback to increase the q_value it predicts) (this means a high target q val for the other tm (y_max))
   (We may not know if that would not result in a fail, but maybe we should assume)
 
--if it succeeded then the TM should be given positive feedback to increase the q_value it predicts. (this means a higher target q val)
+-if it succeeded then the TM should be given positive feedback to increase the q_value it predicts. (this means a higher target q val) (y_max)
  (should the other TM be given negative feedback to reduce the q_value it predicts?)
  (it may not be a bad action for the tm, we also don't know if it would have resulted in a fail or not) if we are to have this it means a lower target_q_val (y_min))
+
+COUNTER POINT
+Possible benefits of using q_val and not just the above is that the the target q_val could be low to suggest a bad decision even if it doesnt result in termination.
+This is a strong benefit for why q_val should be used.
 
 
 
