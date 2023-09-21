@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import os
 import yaml
 from tqdm import tqdm
-
+import random
+random.seed(42)
 from misc.replay_buffer import Replay_buffer
 from misc.plot_test_results import plot_test_results
 
@@ -32,7 +33,7 @@ class TMQN:
 
         self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size)
         self.test_freq = config['test_freq']
-        self.nr_of_test_episodes = 1
+        self.nr_of_test_episodes = 100
 
         self.run_id = 'run_' + str(len([i for i in os.listdir('./results/TMQN')]) + 1)
         self.threshold_score = config['threshold_score']
@@ -44,6 +45,9 @@ class TMQN:
         self.save_path = ''#f'./results/DQN/{self.run_id}'
         self.make_run_dir()
         self.save_config()
+        self.announce()
+    def announce(self):
+        print(f'{self.run_id} has been initialized!')
 
     def make_run_dir(self):
         base_dir = './results'
@@ -121,7 +125,7 @@ class TMQN:
             else:
                 print('Error with get_q_val_for_action')
 
-            print(f'Target q vals: {target_q_vals[index]}')
+            #print(f'{action} - {target_q_vals[index]}')
 
         return tm_1_input, tm_2_input
 
@@ -149,17 +153,20 @@ class TMQN:
             if self.test_freq:
                 if episode % self.test_freq == 0:
                     self.test(nr_of_steps)
+                    plot_test_results(self.save_path, text={'title': 'TMQN'})
                     self.config['nr_of_episodes'] = episode + 1
                     self.config['nr_of_steps'] = nr_of_steps
                     self.save_config()
 
-            cur_obs, _ = self.env.reset(seed=42)
+            cur_obs, _ = self.env.reset(seed=random.randint(1, 10000))
             episode_reward = 0
 
             while True:
                 action = self.action(cur_obs)
                 actions_nr[action] += 1
                 next_obs, reward, done, truncated, _ = self.env.step(action)
+
+                #might want to not have truncated in my replay buffer
                 if truncated:
                     self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(truncated), nr_of_steps)
                 else:
@@ -174,7 +181,6 @@ class TMQN:
             if nr_of_steps >= self.batch_size:
                 self.train()
 
-        plot_test_results(self.save_path, text={'title': 'TMQN'})
 
     def test(self, nr_of_steps):
         exploration_prob = self.exploration_prob

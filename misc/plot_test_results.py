@@ -9,7 +9,7 @@ def plot(data, text, file_path):
     plt.xlabel(f'Timesteps')
     plt.title(f'{text["title"]}')
     plt.savefig(f'{file_path}/sample_plot.png')
-    plt.show()
+    #plt.show()
 
 def get_csv(file_path):
     data = {'mean': [], 'std': [], 'timesteps': []}

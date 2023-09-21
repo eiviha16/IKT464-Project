@@ -82,4 +82,17 @@ Possible benefits of using q_val and not just the above is that the the target q
 This is a strong benefit for why q_val should be used.
 
 
+-------------------------------------------------------------------------
+Tsetlin machine is a bruteforce way of solving a regression problem,
+since it wont know if an individual clause for that example was optimal instead over time it will get a pattern that suits the problem
+This means it will likely learn very slowly and require more time to learn an optimal decision.
+
+
+IMPROVEMENT SUGGESTION:
+TRPO
+dueling q nets
+prioritized experience replay
+n-step TD
+Use an ensemble of TMs
+
 
