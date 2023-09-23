@@ -3,6 +3,7 @@ from tmu.models.regression.vanilla_regressor import TMRegressor
 import numpy as np
 from sklearn import datasets
 import random
+
 class Policy():
     def __init__(self, config):
         #initialize each tm

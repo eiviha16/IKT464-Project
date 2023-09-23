@@ -5,10 +5,9 @@ import os
 import yaml
 from tqdm import tqdm
 import random
-random.seed(42)
+
 from misc.replay_buffer import Replay_buffer
 from misc.plot_test_results import plot_test_results
-
 
 # https://towardsdatascience.com/deep-q-networks-theory-and-implementation-37543f60dd67
 # https://stable-baselines3.readthedocs.io/en/master/modules/dqn.html
@@ -38,7 +37,7 @@ class TMQN:
         self.run_id = 'run_' + str(len([i for i in os.listdir('./results/TMQN')]) + 1)
         self.threshold_score = config['threshold_score']
         self.has_reached_threshold = False
-
+        self.test_random_seeds = [random.randint(1, 100000) for i in range(self.nr_of_test_episodes)]
         self.save = config['save']
         self.best_scores = {'mean': 0, 'std': float('inf')}
         self.config = config
@@ -188,8 +187,8 @@ class TMQN:
         episode_rewards = np.array([0 for i in range(self.nr_of_test_episodes)])
 
         for episode in range(self.nr_of_test_episodes):
-            obs, _ = self.env.reset(seed=episode)#episode)
 
+            obs, _ = self.env.reset(seed=self.test_random_seeds[episode])#episode)
             while True:
                 action = self.action(obs)
                 obs, reward, done, truncated, _ = self.env.step(action)
@@ -205,6 +204,7 @@ class TMQN:
         if mean > self.best_scores['mean']:
             self.save_model('best_model')
             self.best_scores['mean'] = mean
+            print(f'New best mean after {nr_of_steps} steps: {mean}!')
         self.save_model('last_model')
         if mean >= self.threshold_score:
             self.has_reached_threshold = True

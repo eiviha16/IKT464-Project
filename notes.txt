@@ -95,4 +95,17 @@ prioritized experience replay
 n-step TD
 Use an ensemble of TMs
 
+increasing specificity to 10 improved results a lot.
+
+
+----------------------------------------------------------
+run_67 has been initialized!
+  0%|          | 0/5000 [00:00<?, ?it/s]New best mean after 0 steps: 19.76!
+  1%|          | 47/5000 [00:02<02:11, 37.53it/s]New best mean after 1163 steps: 25.32!
+  2%|▏         | 96/5000 [00:04<02:13, 36.62it/s]New best mean after 2245 steps: 28.33!
+ 27%|██▋       | 1347/5000 [00:51<02:11, 27.70it/s]New best mean after 22968 steps: 65.86!
+ 28%|██▊       | 1397/5000 [00:56<02:54, 20.62it/s]New best mean after 26525 steps: 79.87!
+ 29%|██▉       | 1448/5000 [01:02<02:49, 21.01it/s]New best mean after 30294 steps: 319.15!
+ 33%|███▎      | 1648/5000 [01:54<02:42, 20.57it/s]New best mean after 60571 steps: 356.49!
+ 37%|███▋      | 1850/5000 [02:40<03:08, 16.67it/s]New best mean after 79340 steps: 393.04!
 
