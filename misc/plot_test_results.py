@@ -5,6 +5,7 @@ import numpy as np
 def plot(data, text, file_path):
     plt.plot(data['timesteps'], data['mean'])
     plt.fill_between(data['timesteps'], np.array(data['mean']) - np.array(data['std']), np.array(data['mean']) + np.array(data['std']), alpha=0.25)
+    plt.gca().yaxis.grid(True, linestyle='dashed')
     plt.ylabel(f'Points')
     plt.xlabel(f'Timesteps')
     plt.title(f'{text["title"]}')
@@ -27,5 +28,5 @@ def plot_test_results(file_path, text):
     plot(data, text, file_path)
 
 if __name__ == "__main__":
-    text = {'title': 'DQN'}
-    plot_test_results('run_15', text)
+    text = {'title': 'TMQN'}
+    plot_test_results('../results/TMQN/run_70', text)

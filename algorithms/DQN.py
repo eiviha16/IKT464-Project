@@ -58,6 +58,8 @@ class DQN:
     def save_config(self):
         with open(f'{self.save_path}/config.yaml', "w") as yaml_file:
             yaml.dump(self.config, yaml_file, default_flow_style=False)
+    def temporal_difference(self, next_q_vals):
+        return np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
 
     def action(self, cur_obs):
         if np.random.random() < self.exploration_prob:
@@ -80,8 +82,7 @@ class DQN:
             with torch.no_grad():
                 next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs) #next_obs?
                 next_q_vals, _ = torch.max(next_q_vals, dim=1)
-                #Temporal Difference
-                target_q_vals = torch.tensor(self.replay_buffer.sampled_rewards) + (1 - torch.tensor(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
+                target_q_vals = self.temporal_difference(next_q_vals)
 
             cur_q_vals = self.policy.predict(self.replay_buffer.sampled_cur_obs)
             cur_q_vals = self.get_q_val_for_action(cur_q_vals)
@@ -109,20 +110,17 @@ class DQN:
                 action = self.action(cur_obs).numpy()
                 actions_nr[action] += 1
                 next_obs, reward, done, truncated, _ = self.env.step(action)
-                if truncated:
-                    self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(truncated), nr_of_steps)
-                else:
-                    self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
+                self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
                 episode_reward += reward
                 cur_obs = next_obs
                 nr_of_steps += 1
 
                 if done or truncated:
-                    self.update_exploration_prob()
                     break
             if nr_of_steps >= self.batch_size:
                 self.train()
-            np.savetxt('observations3.txt', self.observations, delimiter=',', fmt='%f')
+
+            self.update_exploration_prob()
 
         plot_test_results(self.save_path, text={'title': 'DQN'})
 

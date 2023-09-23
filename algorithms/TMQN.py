@@ -68,6 +68,8 @@ class TMQN:
             return np.random.choice(range(self.action_space_size + 1))
         q_vals = self.policy.predict(cur_obs)
         return np.argmax(q_vals)
+    def temporal_difference(self, next_q_vals):
+        return np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
 
     def update_exploration_prob(self):
         self.exploration_prob = self.exploration_prob * np.exp(-self.exploration_prob_decay)
@@ -138,14 +140,14 @@ class TMQN:
                 #should this be done here? or should I use the q_values depending on the action taken.
                 #I think it should be.
             next_q_vals = np.max(next_q_vals, axis=1)
-            #Temporal Difference
-            target_q_vals = np.array(self.replay_buffer.sampled_rewards) + (1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
+
+            #calculate target q vals
+            target_q_vals = self.temporal_difference((next_q_vals))
             #if target q_vals are lower than 100 it will be considered negative reward. so I need to find a way to normalize the values so that good actions are always over 100 and bad ones under 100.
             tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals)
             self.policy.update(tm_1_input, tm_2_input)
 
     def learn(self, nr_of_episodes):
-
         nr_of_steps = 0
         actions_nr = [0, 0]
         for episode in tqdm(range(nr_of_episodes)):
@@ -166,20 +168,16 @@ class TMQN:
                 next_obs, reward, done, truncated, _ = self.env.step(action)
 
                 #might want to not have truncated in my replay buffer
-                if truncated:
-                    self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(truncated), nr_of_steps)
-                else:
-                    self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
+                self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
                 episode_reward += reward
                 cur_obs = next_obs
                 nr_of_steps += 1
 
                 if done or truncated:
-                    self.update_exploration_prob()
                     break
             if nr_of_steps >= self.batch_size:
                 self.train()
-
+            self.update_exploration_prob()
 
     def test(self, nr_of_steps):
         exploration_prob = self.exploration_prob
