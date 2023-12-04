@@ -28,5 +28,5 @@ class QNet(nn.Module):
         x = self.activation(x)
 
         x = self.output_layer(x)
-        action = self.output_activation(x)
-        return action
+        #action = self.output_activation(x)
+        return x#action

@@ -24,11 +24,11 @@ class DQN:
         self.buffer_size = config['buffer_size']
         self.batch_size = config['batch_size']
 
-        self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size)
+        self.replay_buffer = Replay_buffer(self.buffer_size, self.batch_size, config['n_step_TD'])
         self.test_freq = config['test_freq']
         self.nr_of_test_episodes = 100
 
-        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/DQN')]) + 1)
+        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/DQN-n-step-TD')]) + 1)
         self.threshold_score = config['threshold_score']
         self.has_reached_threshold = False
 
@@ -38,10 +38,10 @@ class DQN:
         self.save_path = ''  # f'./results/DQN/{self.run_id}'
         self.make_run_dir()
         self.save_config()
-        self.q_values = [0, 0]
-        self.nr_actions = 0
 
         self.observations = []
+        self.q_values = [0, 0]
+        self.nr_actions = 0
         self.announce()
 
     def announce(self):
@@ -49,7 +49,7 @@ class DQN:
 
     def make_run_dir(self):
         base_dir = './results'
-        algorithm = f'DQN'
+        algorithm = f'DQN-n-step-TD'
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
         if not os.path.exists(os.path.join(base_dir, algorithm)):
@@ -63,8 +63,20 @@ class DQN:
             yaml.dump(self.config, yaml_file, default_flow_style=False)
 
     def temporal_difference(self, next_q_vals):
-        return torch.tensor(self.replay_buffer.sampled_rewards) + (
-                    1 - torch.tensor(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
+        return np.array(self.replay_buffer.sampled_rewards) + (
+                    1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
+
+    def n_step_temporal_difference(self, next_q_vals):
+        target_q_vals = []
+        for i in range(len(self.replay_buffer.sampled_rewards)):
+            target_q_val = 0
+            for j in range(len(self.replay_buffer.sampled_rewards[i])):
+                target_q_val += (self.gamma ** j) * self.replay_buffer.sampled_rewards[i][j]
+                if self.replay_buffer.sampled_dones[i][j]:
+                    break
+            target_q_val += (1 - self.replay_buffer.sampled_dones[i][j]) * (self.gamma ** j) * next_q_vals[i]
+            target_q_vals.append(target_q_val)
+        return torch.stack(target_q_vals)
 
     def action(self, cur_obs):
         if np.random.random() < self.exploration_prob:
@@ -80,20 +92,24 @@ class DQN:
         self.exploration_prob = self.exploration_prob * np.exp(-self.exploration_prob_decay)
 
     def get_q_val_for_action(self, q_vals):
-        indices = np.array(self.replay_buffer.sampled_actions)
+        sampled_actions = np.array(self.replay_buffer.sampled_actions)
+        indices = sampled_actions[:, 0]
         selected_q_vals = q_vals[range(q_vals.shape[0]), indices]
         return selected_q_vals
 
     def train(self):
         for epoch in range(self.epochs):
             self.replay_buffer.clear_cache()
-            self.replay_buffer.sample()
+            self.replay_buffer.sample_n_seq()
             with torch.no_grad():
-                next_q_vals = self.policy.predict(self.replay_buffer.sampled_next_obs)  # next_obs?
+                sampled_next_obs = np.array(self.replay_buffer.sampled_next_obs)
+                next_q_vals = self.policy.predict(sampled_next_obs[:, -1, :])  # next_obs?
                 next_q_vals, _ = torch.max(next_q_vals, dim=1)
-                target_q_vals = self.temporal_difference(next_q_vals)
+                # target_q_vals = self.temporal_difference(next_q_vals)
+                target_q_vals = self.n_step_temporal_difference(next_q_vals)
 
-            cur_q_vals = self.policy.predict(self.replay_buffer.sampled_cur_obs)
+            sampled_cur_obs = np.array(self.replay_buffer.sampled_cur_obs)
+            cur_q_vals = self.policy.predict(sampled_cur_obs[:, 0, :])
             cur_q_vals = self.get_q_val_for_action(cur_q_vals)
             self.policy.optimizer.zero_grad()
             loss = F.mse_loss(target_q_vals, cur_q_vals)
@@ -126,10 +142,12 @@ class DQN:
 
                 if done or truncated:
                     break
-            if nr_of_steps >= self.batch_size:
+            if nr_of_steps - self.config['n_step_TD'] >= self.batch_size:
                 self.train()
+
             self.update_exploration_prob()
-        plot_test_results(self.save_path, text={'title': 'DQN'})
+
+        plot_test_results(self.save_path, text={'title': 'DQN with n-step TD'})
 
     def test(self, nr_of_steps):
         self.q_values = [0, 0]
@@ -158,6 +176,7 @@ class DQN:
             self.save_model('best_model')
             self.best_scores['mean'] = mean
             print(f'New best mean after {nr_of_steps} steps: {mean}!')
+
         self.save_model('last_model')
         if mean >= self.threshold_score:
             self.has_reached_threshold = True

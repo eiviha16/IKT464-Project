@@ -5,18 +5,19 @@ import os
 import yaml
 from tqdm import tqdm
 import random
+import copy
 
 from misc.replay_buffer import Replay_buffer
 from misc.plot_test_results import plot_test_results, feedback
 
 
-class TMQN:
+class DTMQN:
     def __init__(self, env, Policy, config):
         self.env = env
         self.action_space_size = env.action_space.n.size
         self.obs_space_size = env.observation_space.shape[0]
-        self.policy = Policy(config)
-
+        self.action_policy = Policy(config)
+        self.eval_policy = copy.deepcopy(self.action_policy) #Policy(config)
         self.gamma = config['gamma']  # discount factor
         self.exploration_prob = config['exploration_prob_init']
         self.exploration_prob_decay = config['exploration_prob_decay']
@@ -35,7 +36,7 @@ class TMQN:
         self.test_freq = config['test_freq']
         self.nr_of_test_episodes = 100
 
-        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/TMQN')]) + 1)
+        self.run_id = 'run_' + str(len([i for i in os.listdir('./results/DTMQN')]) + 1)
         self.threshold_score = config['threshold_score']
         self.has_reached_threshold = False
         self.test_random_seeds = [random.randint(1, 100000) for i in range(self.nr_of_test_episodes)]
@@ -56,7 +57,7 @@ class TMQN:
 
     def make_run_dir(self):
         base_dir = './results'
-        algorithm = f'TMQN'
+        algorithm = f'DTMQN'
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
         if not os.path.exists(os.path.join(base_dir, algorithm)):
@@ -73,11 +74,22 @@ class TMQN:
         if np.random.random() < self.exploration_prob:
             q_vals = np.array([np.random.random() for _ in range(self.action_space_size + 1)])
         else:
-            q_vals = self.policy.predict(cur_obs)
+            q_vals = self.action_policy.predict(cur_obs)
             self.q_vals[0] += q_vals[0][0]
             self.q_vals[1] += q_vals[0][1]
+            if q_vals[0][np.argmax(q_vals)] > 200:
+                a = 2
         return np.argmax(q_vals)
-
+    def t_action(self, cur_obs):
+        if np.random.random() < self.exploration_prob:
+            q_vals = np.array([np.random.random() for _ in range(self.action_space_size + 1)])
+        else:
+            q_vals = self.eval_policy.predict(cur_obs)
+            self.q_vals[0] += q_vals[0][0]
+            self.q_vals[1] += q_vals[0][1]
+            if q_vals[0][np.argmax(q_vals)] > 200:
+                a = 2
+        return np.argmax(q_vals)
     def temporal_difference(self, next_q_vals):
         return np.array(self.replay_buffer.sampled_rewards) + (
                 1 - np.array(self.replay_buffer.sampled_dones)) * self.gamma * next_q_vals
@@ -109,12 +121,12 @@ class TMQN:
         feedback_1_cumulated, feedback_2_cumulated = [0, 0], [0, 0]
         for epoch in range(self.epochs):
             self.replay_buffer.clear_cache()
-            self.replay_buffer.sample()  # self.prev_feedback)
-            # self.replay_buffer.prioritized_sample(self.prev_feedback, min_feedback_p=0.001)
-            # self.replay_buffer.split_sample()
+            self.replay_buffer.sample()#self.prev_feedback)
+            #self.replay_buffer.prioritized_sample(self.prev_feedback, min_feedback_p=0.001)
+            #self.replay_buffer.split_sample()
 
             # calculate target_q_vals
-            next_q_vals = self.policy.predict(np.array(self.replay_buffer.sampled_next_obs))  # next_obs?
+            next_q_vals = self.action_policy.predict(np.array(self.replay_buffer.sampled_next_obs))  # next_obs?
             # should this be done here? or should I use the q_values depending on the action taken.
             # I think it should be.
             next_q_vals = np.max(next_q_vals, axis=1)
@@ -123,7 +135,7 @@ class TMQN:
             target_q_vals = self.temporal_difference((next_q_vals))
             # if target q_vals are lower than 100 it will be considered negative reward. so I need to find a way to normalize the values so that good actions are always over 100 and bad ones under 100.
             tm_1_input, tm_2_input = self.get_q_val_and_obs_for_tm(target_q_vals)
-            feedback_1, feedback_2 = self.policy.update(tm_1_input, tm_2_input)
+            feedback_1, feedback_2 = self.action_policy.update(tm_1_input, tm_2_input)
 
             feedback_1_cumulated[0] += feedback_1[0]
             feedback_1_cumulated[1] += feedback_1[1]
@@ -132,6 +144,33 @@ class TMQN:
 
             self.prev_feedback['tm1'] = feedback_1
             self.prev_feedback['tm2'] = feedback_2
+            p1 = random.randint(0, len(self.eval_policy.tm1.clause_bank.clause_bank))
+            p2 = random.randint(p1, len(self.eval_policy.tm1.clause_bank.clause_bank))
+
+            """self.eval_policy.tm1.clause_bank.clause_bank[p1 : p2] = self.action_policy.tm1.clause_bank.clause_bank[p1 : p2]
+            self.eval_policy.tm1.clause_bank.clause_bank_ind[p1 : p2] = self.action_policy.tm1.clause_bank.clause_bank_ind[p1 : p2]
+            self.eval_policy.tm1.clause_bank.clause_bank_ind[int(p1 / 56) : int(p2 / 56)] = self.action_policy.tm1.clause_bank.clause_bank_ind[int(p1 / 56) : int(p2 / 56)]
+
+            self.eval_policy.tm2.clause_bank.clause_bank[p1 : p2]  = self.action_policy.tm2.clause_bank.clause_bank[p1 : p2]
+            self.eval_policy.tm2.clause_bank.clause_bank_ind[p1 : p2]  = self.action_policy.tm2.clause_bank.clause_bank_ind[p1 : p2]
+            self.eval_policy.tm2.clause_bank.clause_bank_ind[int(p1 / 56) : int(p2 / 56)] = self.action_policy.tm2.clause_bank.clause_bank_ind[int(p1 / 56) : int(p2 / 56)]
+"""
+            self.eval_policy.tm1.clause_bank.clause_bank = copy.deepcopy(self.action_policy.tm1.clause_bank.clause_bank)
+            self.eval_policy.tm2.clause_bank.clause_bank = copy.deepcopy(self.action_policy.tm2.clause_bank.clause_bank)
+
+            self.eval_policy.tm1.clause_bank.literal_clause_map = copy.deepcopy(self.action_policy.tm1.clause_bank.literal_clause_map)
+            self.eval_policy.tm2.clause_bank.literal_clause_map = copy.deepcopy(self.action_policy.tm2.clause_bank.literal_clause_map)
+
+            self.eval_policy.tm1.clause_bank.literal_clause_map_pos = copy.deepcopy(self.action_policy.tm1.clause_bank.literal_clause_map_pos)
+            self.eval_policy.tm2.clause_bank.literal_clause_map_pos = copy.deepcopy(self.action_policy.tm2.clause_bank.literal_clause_map_pos)
+
+            self.eval_policy.tm1.clause_bank.clause_output_patchwise = copy.deepcopy(self.action_policy.tm1.clause_bank.clause_output_patchwise)
+            self.eval_policy.tm2.clause_bank.clause_output_patchwise = copy.deepcopy(self.action_policy.tm2.clause_bank.clause_output_patchwise)
+
+            self.eval_policy.tm1.clause_bank.clause_bank_ind = copy.deepcopy(self.action_policy.tm1.clause_bank.clause_bank_ind)
+            self.eval_policy.tm2.clause_bank.clause_bank_ind = copy.deepcopy(self.action_policy.tm2.clause_bank.clause_bank_ind)
+
+            #b = 1
         return feedback_1_cumulated, feedback_2_cumulated
 
     def save_feedback_data(self, feedback_1, feedback_2, nr_of_steps):
@@ -162,8 +201,8 @@ class TMQN:
                         new_memory_size = max(self.dynamic_memory_min_size, int(intervals * np.ceil(
                             self.dynamic_memory_max_size / intervals * intervals * self.cur_mean / max_score / intervals)))
 
-                        self.policy.tm1.update_memory_size(new_memory_size)
-                        self.policy.tm2.update_memory_size(new_memory_size)
+                        self.action_policy.tm1.update_memory_size(new_memory_size)
+                        self.action_policy.tm2.update_memory_size(new_memory_size)
 
             cur_obs, _ = self.env.reset(seed=random.randint(1, 10000))
             episode_reward = 0
@@ -175,9 +214,9 @@ class TMQN:
 
                 # might want to not have truncated in my replay buffer
                 self.replay_buffer.save_experience(action, cur_obs, next_obs, reward, int(done), nr_of_steps)
-                # self.replay_buffer.prioritized_save_experience(action, cur_obs, next_obs, reward, int(done),
+                #self.replay_buffer.prioritized_save_experience(action, cur_obs, next_obs, reward, int(done),
                 #                                               nr_of_steps)
-                # self.replay_buffer.split_save_experience(action, cur_obs, next_obs, reward, int(done),
+                #self.replay_buffer.split_save_experience(action, cur_obs, next_obs, reward, int(done),
                 #                                               nr_of_steps)
                 episode_reward += reward
                 cur_obs = next_obs
@@ -186,14 +225,14 @@ class TMQN:
                 if done or truncated:
                     break
             if nr_of_steps >= self.batch_size:
-                # if len(self.replay_buffer._dones[0]) >= self.batch_size and len(
-                #        self.replay_buffer._dones[1]) >= self.batch_size:
+            #if len(self.replay_buffer._dones[0]) >= self.batch_size and len(
+            #        self.replay_buffer._dones[1]) >= self.batch_size:
                 feedback_1, feedback_2 = self.train()
                 self.save_feedback_data(feedback_1, feedback_2, nr_of_steps)
                 self.save_actions(actions, nr_of_steps)
             self.update_exploration_prob()
-        plot_test_results(self.save_path, text={'title': 'TMQN'})
-        feedback(self.save_path, text={'title': 'Balanced TMQN'})
+        plot_test_results(self.save_path, text={'title': 'DTMQN'})
+        feedback(self.save_path, text={'title': 'DTMQN'})
 
     def test(self, nr_of_steps):
         self.q_vals = [0, 0]
@@ -206,7 +245,7 @@ class TMQN:
 
             obs, _ = self.env.reset(seed=self.test_random_seeds[episode])  # episode)
             while True:
-                action = self.action(obs)
+                action = self.t_action(obs)
                 self.nr_actions += 1
                 obs, reward, done, truncated, _ = self.env.step(action)
                 episode_rewards[episode] += reward
@@ -235,7 +274,7 @@ class TMQN:
         self.save_q_vals(nr_of_steps)
 
     def save_model(self, file_name):
-        torch.save(self.policy, os.path.join(self.save_path, file_name))
+        torch.save(self.action_policy, os.path.join(self.save_path, file_name))
 
     def save_results(self, mean, std, nr_of_steps):
         file_name = 'test_results.csv'

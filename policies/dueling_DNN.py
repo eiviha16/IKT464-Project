@@ -18,7 +18,8 @@ class QNet(nn.Module):
         # layers
         self.input_layer = nn.Linear(input_size, hidden_size)
         self.hidden_layer = nn.Linear(hidden_size, hidden_size)
-        self.output_layer = nn.Linear(hidden_size, output_size * 2)
+        self.value_layer = nn.Linear(hidden_size, 1)
+        self.advantage_layer = nn.Linear(hidden_size, output_size * 2)
 
     def forward(self, input):
         x = self.input_layer(input)
@@ -27,10 +28,21 @@ class QNet(nn.Module):
         x = self.hidden_layer(x)
         x = self.activation(x)
 
-        x = self.output_layer(x)
-        #action = self.output_activation(x)
-        return x #action * self.c
+        advantage = self.advantage_layer(x)
+        value = self.value_layer(x)
 
+        x = (value + (advantage - advantage.mean(dim=1, keepdim=True)))
+        return x
+
+    def advantage(self, input):
+        x = self.input_layer(input)
+        x = self.activation(x)
+
+        x = self.hidden_layer(x)
+        x = self.activation(x)
+
+        advantage = self.advantage_layer(x)
+        return advantage
 
 class Policy(QNet):
     def __init__(self, input_size, output_size, config):
@@ -40,3 +52,7 @@ class Policy(QNet):
     def predict(self, input):
         q_vals = self.forward(torch.tensor(np.array(input)))
         return q_vals
+
+    def advantage(self, input):
+        advantage = self.advantage(np.array(input))
+        return advantage
